@@ -5,24 +5,35 @@
 #include "Toggle_Switch.h"
 #include "DriverMotor_AFM.h"
 
-// Contexts and handles
-static SensorPinContext ultrasonic_hcsr04_driver_context_1 = {A0, A1}; // Trigger pin A0, Echo pin A1
-static SwitchContext switch_context_1 = {A4, false, true, 0};          // Switch 1: Pin A4
-static DriverMotorContext_t afm_motor_driver_ctx_prop_1 = {1};         // Motor 1
-static DriverMotorContext_t afm_motor_driver_ctx_winch_1 = {2};        // Motor 2
-static ApplicationHandle_t app_handle_1;
-Application app_1(app_handle_1); // Application instance
+// -- Constants --
+#define NUM_APPS 2
 
-static SensorPinContext ultrasonic_hcsr04_driver_context_2 = {A2, A3}; // Trigger pin A0, Echo pin A1
-static SwitchContext switch_context_2 = {A5, false, true, 0};          // Switch 1: Pin A4
-static DriverMotorContext_t afm_motor_driver_ctx_prop_2 = {3};         // Motor 1
-static DriverMotorContext_t afm_motor_driver_ctx_winch_2 = {4};        // Motor 2
-static ApplicationHandle_t app_handle_2;
-Application app_2(app_handle_2);
+// -- Contexts --
+static SensorPinContext sensor_contexts[NUM_APPS] = {
+    {A0, A1},
+    {A2, A3}
+};
 
-uint64_t last_time = 0; // Last sensor update time
+static SwitchContext switch_contexts[NUM_APPS] = {
+    {A4, false, true, 0},
+    {A5, false, true, 0}
+};
 
-// Function to calculate free memory
+static DriverMotorContext_t prop_motor_contexts[NUM_APPS] = {
+    {1}, {3}
+};
+
+static DriverMotorContext_t winch_motor_contexts[NUM_APPS] = {
+    {2}, {4}
+};
+
+static ApplicationHandle_t app_handles[NUM_APPS];
+static Application* apps[NUM_APPS];  // Pointers to Application objects
+
+// -- Time --
+static uint64_t last_time = 0;
+
+// -- RAM Check --
 int freeMemory()
 {
     extern int __heap_start, *__brkval;
@@ -30,142 +41,110 @@ int freeMemory()
     return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }
 
-// Function to initialize application handle
-void initializeAppHandle()
+// -- Initialization per app --
+void initializeAppHandle(int i)
 {
-    app_handle_1.sensor_handle = (sensor_handle_t)&ultrasonic_hcsr04_driver_context_1;
-    app_handle_1.switch_handle = (switch_handle_t)&switch_context_1;
-    app_handle_1.motor_handle_prop = (motor_handle_t)&afm_motor_driver_ctx_prop_1;
-    app_handle_1.motor_handle_winch = (motor_handle_t)&afm_motor_driver_ctx_winch_1;
-    
-    app_handle_1.water_level_sensor = &ultrasonic_hcsr04_driver;
-    app_handle_1.toggle_switch_driver = &toggle_switch_driver;
-    app_handle_1.motor_propeller = &afm_motor_prop;
-    app_handle_1.motor_winch = &afm_motor_winch;
-    
-    app_handle_2.sensor_handle = (sensor_handle_t)&ultrasonic_hcsr04_driver_context_2;
-    app_handle_2.switch_handle = (switch_handle_t)&switch_context_2;
-    app_handle_2.motor_handle_prop = (motor_handle_t)&afm_motor_driver_ctx_prop_2;
-    app_handle_2.motor_handle_winch = (motor_handle_t)&afm_motor_driver_ctx_winch_2;
-    
-    app_handle_2.water_level_sensor = &ultrasonic_hcsr04_driver;
-    app_handle_2.toggle_switch_driver = &toggle_switch_driver;
-    app_handle_2.motor_propeller = &afm_motor_prop;
-    app_handle_2.motor_winch = &afm_motor_winch;
+    app_handles[i].sensor_handle = (sensor_handle_t)&sensor_contexts[i];
+    app_handles[i].switch_handle = (switch_handle_t)&switch_contexts[i];
+    app_handles[i].motor_handle_prop = (motor_handle_t)&prop_motor_contexts[i];
+    app_handles[i].motor_handle_winch = (motor_handle_t)&winch_motor_contexts[i];
+
+    app_handles[i].water_level_sensor = &ultrasonic_hcsr04_driver;
+    app_handles[i].toggle_switch_driver = &toggle_switch_driver;
+    app_handles[i].motor_propeller = &afm_motor_prop;
+    app_handles[i].motor_winch = &afm_motor_winch;
+
+    apps[i] = new Application(app_handles[i]);
 }
 
-// Function to print application status
+// -- Print App Status --
 void printAppStatus(uint32_t &live_count)
 {
     Serial.println();
-    Serial.print("[main] live count: "); Serial.print(live_count++); Serial.print("\t[RAM] Free RAM: ");
-    Serial.print(freeMemory()); Serial.print(" bytes");
-    Serial.println();
+    Serial.print("[main] live count: ");
+    Serial.print(live_count++);
+    Serial.print("\t[RAM] Free RAM: ");
+    Serial.print(freeMemory());
+    Serial.println(" bytes");
 
-    Serial.print("> ");
-
-    app_1.update_sensor();
-    int water_level_1 = app_1.get_water_level();
-    Serial.print("Water level 1: ");
-    Serial.print(water_level_1);
-    Serial.print(" cm\t");
-    
-    Serial.print("Prop 1 speed: ");
-    Serial.print(app_1.get_prop_speed());
-    
-    int winch_state_1 = app_1.get_winch_state();
-    Serial.print("\tWinch 1 rot: (" + String(winch_state_1) + ") ");
-    switch (winch_state_1)
+    for (int i = 0; i < NUM_APPS; i++)
     {
-        case 1:
-        Serial.print("CW");
-        break;
-        case 2:
-        Serial.print("CCW");
-        break;
-        case 3:
-        Serial.print("Stop");
-        break;
-        default:
-        Serial.print("Invalid!");
-        break;
-    }
-    
-    Serial.println();
-    Serial.print("> ");
-    
-    app_2.update_sensor();
-    int water_level_2 = app_2.get_water_level();
-    Serial.print("Water level 2: ");
-    Serial.print(water_level_2);
-    Serial.print(" cm\t");
-    
-    Serial.print("Prop 2 speed: ");
-    Serial.print(app_2.get_prop_speed());
+        Serial.print("> ");
 
-    int winch_state_2 = app_2.get_winch_state();
-    Serial.print("\tWinch 2 rot: (" + String(winch_state_2) + ") ");
-    switch (winch_state_2)
-    {
-        case 1:
-        Serial.print("CW");
-        break;
-        case 2:
-        Serial.print("CCW");
-        break;
-        case 3:
-        Serial.print("Stop");
-        break;
-        default:
-        Serial.print("Invalid!");
-        break;
-    }
+        apps[i]->update_sensor();
+        int water_level = apps[i]->get_water_level();
+        Serial.print("Water level ");
+        Serial.print(i + 1);
+        Serial.print(": ");
+        Serial.print(water_level);
+        Serial.print(" cm\t");
 
-    Serial.println();
+        Serial.print("Prop ");
+        Serial.print(i + 1);
+        Serial.print(" speed: ");
+        Serial.print(apps[i]->get_prop_speed());
+
+        int winch_state = apps[i]->get_winch_state();
+        Serial.print("\tWinch ");
+        Serial.print(i + 1);
+        Serial.print(" rot: (");
+        Serial.print(winch_state);
+        Serial.print(") ");
+        switch (winch_state)
+        {
+            case 1: Serial.print("CW"); break;
+            case 2: Serial.print("CCW"); break;
+            case 3: Serial.print("Stop"); break;
+            default: Serial.print("Invalid!"); break;
+        }
+
+        Serial.println();
+    }
 }
 
+// -- Arduino Setup --
 void setup()
 {
-    wdt_disable(); // Disable WDT
-
-    initializeAppHandle();
-
+    wdt_disable();
     Serial.begin(9600);
-    delay(1000); // Wait for serial connection
+    delay(1000);
 
-    wdt_enable(WDTO_2S); // Set WDT timeout to 2 seconds
-
-    Serial.println("[main] Starting application...");
-    
-    if (!app_1.init())
+    for (int i = 0; i < NUM_APPS; i++)
     {
-        Serial.println("[main] Application 1 initialization failed!");
-        return;
+        initializeAppHandle(i);
     }
 
-    if (!app_2.init())
+    wdt_enable(WDTO_2S);
+    Serial.println("[main] Starting applications...");
+
+    for (int i = 0; i < NUM_APPS; i++)
     {
-        Serial.println("[main] Application 2 initialization failed!");
-        return;
+        if (!apps[i]->init())
+        {
+            Serial.print("[main] Application ");
+            Serial.print(i + 1);
+            Serial.println(" initialization failed!");
+        }
     }
 }
 
+// -- Arduino Loop --
 void loop()
 {
-    wdt_reset(); // Reset watchdog timer
+    wdt_reset();
 
-    app_1.update_switch_state();
-    app_1.enable_motor_winch();
-    app_1.enable_motor_propeller(20);
-    
-    app_2.update_switch_state();
-    app_2.enable_motor_winch();
-    app_2.enable_motor_propeller(20);
+    for (int i = 0; i < NUM_APPS; i++)
+    {
+        apps[i]->update_switch_state();
+        apps[i]->enable_motor_winch();
+        apps[i]->enable_motor_propeller(20);
+    }
 
+    static uint32_t live_count = 0;
     uint64_t current_time = millis();
+
     if (current_time - last_time >= 1000)
     {
-        static uint32_t live_count = 0;
         printAppStatus(live_count);
         last_time = current_time;
     }

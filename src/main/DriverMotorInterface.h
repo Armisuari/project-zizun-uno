@@ -1,6 +1,8 @@
 #ifndef MOTORINTERFACE_H
 #define MOTORINTERFACE_H
 
+#include <stdint.h>
+
 typedef enum
 {
     CLOCKWISE = 1,
@@ -11,7 +13,7 @@ typedef enum
 typedef struct 
 {
     int state;
-    int speed;
+    uint32_t speed;
 }MotorState_t;
 
 typedef void *motor_handle_t;

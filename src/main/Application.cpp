@@ -72,15 +72,19 @@ void Application::enable_motor_winch()
 void Application::enable_motor_propeller(int threshold)
 {
     // Calculate the speed based on water level distance
-    int speed = (water_level_data.distance >= 0) 
-                ? map(water_level_data.distance, 0, 100, 0, 255) 
-                : 0;
+    // int speed = (water_level_data.distance >= 0) 
+    //             ? map(water_level_data.distance, 0, 50, 0, 255) 
+    //             : 0;
 
-    motor_prop.speed = speed;
+    // motor_prop.speed = speed;
+
+    motor_prop.speed = water_level_data.distance;
+    motor_prop.speed = map(motor_prop.speed, 0, 100, 255, 0);
+
     // Control the motor propeller based on the water level threshold
     if (water_level_data.distance < threshold)
     {
-        app_handle.motor_propeller->runFwd(app_handle.motor_handle_prop, speed);
+        app_handle.motor_propeller->runFwd(app_handle.motor_handle_prop, motor_prop.speed);
     }
     else
     {

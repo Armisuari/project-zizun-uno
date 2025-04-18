@@ -2,39 +2,40 @@
 
 Application::Application(ApplicationHandle_t &app_handle) : app_handle(app_handle) {}
 
+static int init_water_level_sensor(ApplicationHandle_t &app_handle) { return app_handle.water_level_sensor->init(app_handle.sensor_handle); }
+static int init_toggle_switch_driver(ApplicationHandle_t &app_handle) { return app_handle.toggle_switch_driver->init(app_handle.switch_handle); }
+static int init_motor_driver_propeller(ApplicationHandle_t &app_handle) { return app_handle.motor_propeller->init(app_handle.motor_handle_prop); }
+static int init_motor_driver_winch(ApplicationHandle_t &app_handle) { return app_handle.motor_winch->init(app_handle.motor_handle_winch); }
+
 bool Application::init()
 {
-    // Initialize the water level sensor
-    if (app_handle.water_level_sensor->init(app_handle.sensor_handle) != 0)
+    struct InitComponent
     {
-        Serial.println("[Application] Error initializing water level sensor");
-        return false;
-    }
+        const char *name;
+        int (*init_func)(ApplicationHandle_t &);
+    };
 
-    // Initialize the toggle switch driver
-    if (app_handle.toggle_switch_driver->init(app_handle.switch_handle) != 0)
-    {
-        Serial.println("[Application] Error initializing toggle switch driver");
-        return false;
-    }
+    InitComponent components[] = {
+        {"water level sensor", init_water_level_sensor},
+        {"toggle switch driver", init_toggle_switch_driver},
+        {"motor driver for propeller", init_motor_driver_propeller},
+        {"motor driver for winch", init_motor_driver_winch},
+    };
 
-    // Initialize the motor driver
-    if (app_handle.motor_propeller->init(app_handle.motor_handle_prop) != 0)
+    for (const auto &component : components)
     {
-        Serial.println("[Application] Error initializing motor driver for propeller");
-        return false;
+        if (component.init_func(app_handle) != 0)
+        {
+            Serial.print("[Application] Error initializing ");
+            Serial.println(component.name);
+            return false;
+        }
+        Serial.print("[Application] ");
+        Serial.print(component.name);
+        Serial.println(" initialized successfully");
     }
-    Serial.println("[Application] Motor driver for propeller initialized successfully");
-
-    if (app_handle.motor_winch->init(app_handle.motor_handle_winch) != 0)
-    {
-        Serial.println("[Application] Error initializing motor driver for winch");
-        return false;
-    }
-    Serial.println("[Application] Motor driver for winch initialized successfully");
 
     Serial.println("[Application] Initialization successful");
-
     return true;
 }
 
@@ -71,17 +72,10 @@ void Application::enable_motor_winch()
 
 void Application::enable_motor_propeller(int threshold)
 {
-    // Calculate the speed based on water level distance
-    // int speed = (water_level_data.distance >= 0) 
-    //             ? map(water_level_data.distance, 0, 50, 0, 255) 
-    //             : 0;
+    // Map water level distance to motor speed
+    motor_prop.speed = map(water_level_data.distance, 0, 100, 255, 0);
 
-    // motor_prop.speed = speed;
-
-    motor_prop.speed = water_level_data.distance;
-    motor_prop.speed = map(motor_prop.speed, 0, 100, 255, 0);
-
-    // Control the motor propeller based on the water level threshold
+    // Determine motor action based on water level threshold
     if (water_level_data.distance < threshold)
     {
         app_handle.motor_propeller->runFwd(app_handle.motor_handle_prop, motor_prop.speed);

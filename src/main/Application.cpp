@@ -2,42 +2,24 @@
 
 Application::Application(ApplicationHandle_t &app_handle) : app_handle(app_handle) {}
 
-static int init_water_level_sensor(ApplicationHandle_t &app_handle) { return app_handle.water_level_sensor->init(app_handle.sensor_handle); }
-static int init_toggle_switch_driver(ApplicationHandle_t &app_handle) { return app_handle.toggle_switch_driver->init(app_handle.switch_handle); }
-static int init_motor_driver_propeller(ApplicationHandle_t &app_handle) { return app_handle.motor_propeller->init(app_handle.motor_handle_prop); }
-static int init_motor_driver_winch(ApplicationHandle_t &app_handle) { return app_handle.motor_winch->init(app_handle.motor_handle_winch); }
-
 bool Application::init()
 {
-    struct InitComponent
-    {
-        const char *name;
-        int (*init_func)(ApplicationHandle_t &);
-    };
+    if (app_handle.water_level_sensor && app_handle.sensor_handle)
+        if (app_handle.water_level_sensor->init(app_handle.sensor_handle) != 0) return false;
 
-    InitComponent components[] = {
-        {"water level sensor", init_water_level_sensor},
-        {"toggle switch driver", init_toggle_switch_driver},
-        {"motor driver for propeller", init_motor_driver_propeller},
-        {"motor driver for winch", init_motor_driver_winch},
-    };
+    if (app_handle.toggle_switch_driver && app_handle.switch_handle)
+        if (app_handle.toggle_switch_driver->init(app_handle.switch_handle) != 0) return false;
 
-    for (const auto &component : components)
-    {
-        if (component.init_func(app_handle) != 0)
-        {
-            Serial.print("[Application] Error initializing ");
-            Serial.println(component.name);
-            return false;
-        }
-        Serial.print("[Application] ");
-        Serial.print(component.name);
-        Serial.println(" initialized successfully");
-    }
+    if (app_handle.motor_propeller && app_handle.motor_handle_prop)
+        if (app_handle.motor_propeller->init(app_handle.motor_handle_prop) != 0) return false;
+
+    if (app_handle.motor_winch && app_handle.motor_handle_winch)
+        if (app_handle.motor_winch->init(app_handle.motor_handle_winch) != 0) return false;
 
     Serial.println("[Application] Initialization successful");
     return true;
 }
+
 
 void Application::update_sensor()
 {

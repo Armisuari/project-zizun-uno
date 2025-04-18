@@ -11,8 +11,14 @@ static SwitchContext switch_context_1 = {A4, false, true, 0};          // Switch
 static DriverMotorContext_t afm_motor_driver_ctx_prop_1 = {1};         // Motor 1
 static DriverMotorContext_t afm_motor_driver_ctx_winch_1 = {2};        // Motor 2
 static ApplicationHandle_t app_handle_1;
-
 Application app_1(app_handle_1); // Application instance
+
+static SensorPinContext ultrasonic_hcsr04_driver_context_2 = {A2, A3}; // Trigger pin A0, Echo pin A1
+static SwitchContext switch_context_2 = {A5, false, true, 0};          // Switch 1: Pin A4
+static DriverMotorContext_t afm_motor_driver_ctx_prop_2 = {3};         // Motor 1
+static DriverMotorContext_t afm_motor_driver_ctx_winch_2 = {4};        // Motor 2
+static ApplicationHandle_t app_handle_2;
+Application app_2(app_handle_2);
 
 uint64_t last_time = 0; // Last sensor update time
 
@@ -31,51 +37,91 @@ void initializeAppHandle()
     app_handle_1.switch_handle = (switch_handle_t)&switch_context_1;
     app_handle_1.motor_handle_prop = (motor_handle_t)&afm_motor_driver_ctx_prop_1;
     app_handle_1.motor_handle_winch = (motor_handle_t)&afm_motor_driver_ctx_winch_1;
-
+    
     app_handle_1.water_level_sensor = &ultrasonic_hcsr04_driver;
     app_handle_1.toggle_switch_driver = &toggle_switch_driver;
     app_handle_1.motor_propeller = &afm_motor_prop;
     app_handle_1.motor_winch = &afm_motor_winch;
+    
+    app_handle_2.sensor_handle = (sensor_handle_t)&ultrasonic_hcsr04_driver_context_2;
+    app_handle_2.switch_handle = (switch_handle_t)&switch_context_2;
+    app_handle_2.motor_handle_prop = (motor_handle_t)&afm_motor_driver_ctx_prop_2;
+    app_handle_2.motor_handle_winch = (motor_handle_t)&afm_motor_driver_ctx_winch_2;
+    
+    app_handle_2.water_level_sensor = &ultrasonic_hcsr04_driver;
+    app_handle_2.toggle_switch_driver = &toggle_switch_driver;
+    app_handle_2.motor_propeller = &afm_motor_prop;
+    app_handle_2.motor_winch = &afm_motor_winch;
 }
 
 // Function to print application status
 void printAppStatus(uint32_t &live_count)
 {
-    Serial.print("[main] live count: ");
-    Serial.print(live_count++);
-    Serial.print("\t");
+    Serial.println();
+    Serial.print("[main] live count: "); Serial.print(live_count++); Serial.print("\t[RAM] Free RAM: ");
+    Serial.print(freeMemory()); Serial.print(" bytes");
+    Serial.println();
+
+    Serial.print("> ");
 
     app_1.update_sensor();
-
-    int water_level = app_1.get_water_level();
+    int water_level_1 = app_1.get_water_level();
     Serial.print("Water level 1: ");
-    Serial.print(water_level);
+    Serial.print(water_level_1);
     Serial.print(" cm\t");
-
+    
     Serial.print("Prop 1 speed: ");
     Serial.print(app_1.get_prop_speed());
-
-    int winch_state = app_1.get_winch_state();
-    Serial.print("\tWinch 1 rot: (" + String(winch_state) + ") ");
-    switch (winch_state)
+    
+    int winch_state_1 = app_1.get_winch_state();
+    Serial.print("\tWinch 1 rot: (" + String(winch_state_1) + ") ");
+    switch (winch_state_1)
     {
-    case 1:
+        case 1:
         Serial.print("CW");
         break;
-    case 2:
+        case 2:
         Serial.print("CCW");
         break;
-    case 3:
+        case 3:
         Serial.print("Stop");
         break;
-    default:
+        default:
+        Serial.print("Invalid!");
+        break;
+    }
+    
+    Serial.println();
+    Serial.print("> ");
+    
+    app_2.update_sensor();
+    int water_level_2 = app_2.get_water_level();
+    Serial.print("Water level 2: ");
+    Serial.print(water_level_2);
+    Serial.print(" cm\t");
+    
+    Serial.print("Prop 2 speed: ");
+    Serial.print(app_2.get_prop_speed());
+
+    int winch_state_2 = app_2.get_winch_state();
+    Serial.print("\tWinch 2 rot: (" + String(winch_state_2) + ") ");
+    switch (winch_state_2)
+    {
+        case 1:
+        Serial.print("CW");
+        break;
+        case 2:
+        Serial.print("CCW");
+        break;
+        case 3:
+        Serial.print("Stop");
+        break;
+        default:
         Serial.print("Invalid!");
         break;
     }
 
-    Serial.print("\t[RAM] Free RAM: ");
-    Serial.print(freeMemory());
-    Serial.println(" bytes");
+    Serial.println();
 }
 
 void setup()
@@ -90,13 +136,18 @@ void setup()
     wdt_enable(WDTO_2S); // Set WDT timeout to 2 seconds
 
     Serial.println("[main] Starting application...");
+    
     if (!app_1.init())
     {
         Serial.println("[main] Application 1 initialization failed!");
         return;
     }
 
-    Serial.println("[main] Application 1 initialized successfully!");
+    if (!app_2.init())
+    {
+        Serial.println("[main] Application 2 initialization failed!");
+        return;
+    }
 }
 
 void loop()
@@ -106,6 +157,10 @@ void loop()
     app_1.update_switch_state();
     app_1.enable_motor_winch();
     app_1.enable_motor_propeller(20);
+    
+    app_2.update_switch_state();
+    app_2.enable_motor_winch();
+    app_2.enable_motor_propeller(20);
 
     uint64_t current_time = millis();
     if (current_time - last_time >= 1000)
